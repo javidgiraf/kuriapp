@@ -1,0 +1,2 @@
+[25-Nov-2024 07:26:31 UTC] PHP Fatal error:  Cannot declare class App\Console\Commands\SendPaymentReminder, because the name is already in use in /home2/bigleapt/public_html/kuriapp/app/Console/Commands/SendFirebaseNotification.php on line 9
+[25-Nov-2024 03:33:24 America/Boise] PHP Fatal error:  Out of memory (allocated 89616384 bytes) (tried to allocate 5242880 bytes) in /home2/bigleapt/public_html/kuriapp/vendor/composer/autoload_classmap.php on line 24927

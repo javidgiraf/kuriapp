@@ -1,0 +1,29 @@
+[01-Jan-2024 00:18:41 America/Boise] PHP Fatal error:  Composer detected issues in your platform: Your Composer dependencies require a PHP version ">= 8.1.0". You are running 8.0.30. in /home2/bigleapt/public_html/apikuriapp/vendor/composer/platform_check.php on line 24
+[26-Jan-2024 18:51:28 UTC] PHP Fatal error:  Cannot use empty array elements in arrays in /home2/bigleapt/public_html/apikuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 284
+[26-Jan-2024 18:51:48 UTC] PHP Fatal error:  Cannot use empty array elements in arrays in /home2/bigleapt/public_html/apikuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 284
+[26-Jan-2024 18:52:32 UTC] PHP Fatal error:  Cannot use empty array elements in arrays in /home2/bigleapt/public_html/apikuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 284
+[26-Jan-2024 18:52:57 UTC] PHP Fatal error:  Cannot use empty array elements in arrays in /home2/bigleapt/public_html/apikuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 284
+[22-Nov-2024 06:05:50 UTC] PHP Fatal error:  Trait "App\Traits\NotificationTraits" not found in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 34
+[22-Nov-2024 06:05:50 UTC] PHP Fatal error:  Trait "App\Traits\NotificationTraits" not found in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 34
+[22-Nov-2024 06:06:08 UTC] PHP Fatal error:  Trait "App\Traits\NotificationTraits" not found in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 34
+[22-Nov-2024 06:06:08 UTC] PHP Fatal error:  Trait "App\Traits\NotificationTraits" not found in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 34
+[22-Nov-2024 06:06:57 UTC] PHP Fatal error:  Trait "App\Http\Controllers\api\v1\NotificationTraits" not found in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 34
+[22-Nov-2024 06:06:58 UTC] PHP Fatal error:  Trait "App\Http\Controllers\api\v1\NotificationTraits" not found in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 34
+[22-Nov-2024 06:08:07 UTC] PHP Fatal error:  Trait "App\Http\Controllers\api\v1\NotificationTraits" not found in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 34
+[22-Nov-2024 06:08:26 UTC] PHP Fatal error:  Trait "App\Http\Controllers\api\v1\NotificationTraits" not found in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 34
+[22-Nov-2024 06:08:27 UTC] PHP Fatal error:  Trait "App\Http\Controllers\api\v1\NotificationTraits" not found in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 34
+[30-Dec-2024 07:09:09 UTC] PHP Fatal error:  Cannot use [] for reading in /home2/bigleapt/public_html/kuriapp/app/Http/Controllers/api/v1/ProfileController.php on line 426
+[26-Feb-2025 07:06:43 UTC] OTP API Response:  | HTTP Code: 415
+[26-Feb-2025 07:06:43 UTC] Failed to send OTP. Response: 
+[26-Feb-2025 07:07:56 UTC] OTP API Response:  | HTTP Code: 415
+[26-Feb-2025 07:07:56 UTC] Failed to send OTP. Response: 
+[26-Feb-2025 07:08:01 UTC] OTP API Response:  | HTTP Code: 415
+[26-Feb-2025 07:08:01 UTC] Failed to send OTP. Response: 
+[26-Feb-2025 07:10:33 UTC] OTP API Response:  | HTTP Code: 415
+[26-Feb-2025 07:10:33 UTC] Failed to send OTP. Response: 
+[26-Feb-2025 07:43:57 UTC] OTP API Response:  | HTTP Code: 415
+[26-Feb-2025 07:43:57 UTC] Failed to send OTP. Response: 
+[27-Feb-2025 03:21:35 UTC] OTP API Response:  | HTTP Code: 415
+[27-Feb-2025 03:21:35 UTC] Failed to send OTP. Response: 
+[27-Feb-2025 04:08:53 UTC] OTP API Response:  | HTTP Code: 415
+[27-Feb-2025 04:08:53 UTC] Failed to send OTP. Response: 

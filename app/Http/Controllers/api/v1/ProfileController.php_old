@@ -1,0 +1,842 @@
+<?php
+
+namespace App\Http\Controllers\api\v1;
+
+use App\Helpers\MachineHelper;
+use App\Helpers\UniqueHelper;
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use App\Models\Address;
+use App\Models\Country;
+use App\Models\State;
+use App\Models\Customer;
+use App\Models\User;
+use App\Models\Nominee;
+use App\Models\District;
+use App\Models\UserSubscription;
+use App\Models\Deposit;
+use App\Models\DepositPeriod;
+use Hash;
+use Carbon\Carbon;
+use App\Helpers;
+use App\Models\RazorpayTransaction;
+use Illuminate\Support\Arr;
+use Razorpay\Api\Api;
+
+class ProfileController extends Controller
+{
+    //
+
+
+    public function profile()
+    {
+        $id = auth()->user()->id;
+        $user = User::with('customer')->with('nominee')->where('id', $id)->first();
+        $address = Address::with('country')->with('state')->with('district')->where('user_id', $id)->first();
+        // $countries = Country::all();
+        return response()->json([
+            'user' => $user,
+            'address' => $address,
+            'status' => '1'
+        ]);
+    }
+
+    public function profileUpdate(Request $request)
+    {
+
+        $id = auth()->user()->id;
+        $request->validate([
+            'name' => 'required',
+            'email' => 'required|email|unique:users,email,' . $id . ',id',
+            'referrel_code' => 'required|unique:customers,referrel_code,' . $id . ',user_id',
+            'mobile' => 'required|unique:customers,mobile,' . $id . ',user_id',
+            //  'password' => 'required',
+            'aadhar_number' => 'required|numeric|unique:customers,aadhar_number,' . $id . ',user_id',
+            'address' => 'required',
+            'country_id' => 'required',
+            'state_id' => 'required',
+            'district_id' => 'required',
+            'pincode' => 'required|numeric',
+            'nominee_name' => 'required',
+            'nominee_relationship' => 'required',
+            'nominee_phone' => 'required',
+        ]);
+        $password =  (isset($request->password) && $request->password) ? $request->password : '123456';
+        $password = Hash::make($password);
+        User::where('id', $id)->update([
+            'name' => $request->name,
+            'email' => $request->email,
+            'password' => $password,
+
+        ]);
+        Customer::where('user_id', $id)->update([
+            'referrel_code' => $request->referrel_code,
+            'mobile' => $request->mobile,
+            'password' => $password,
+            'aadhar_number' => $request->aadhar_number,
+        ]);
+
+        Address::updateOrCreate([
+            //Add unique field combo to match here
+            //For example, perhaps you only want one entry per user:
+            'user_id'   => $id,
+        ], [
+            'address'     => $request->address,
+            'country_id' => $request->country_id,
+            'state_id'    => $request->state_id,
+            'district_id'   => $request->district_id,
+            'pincode'       => $request->pincode,
+        ]);
+        Nominee::updateOrCreate([
+            //Add unique field combo to match here
+            //For example, perhaps you only want one entry per user:
+            'user_id'   => $id,
+        ], [
+            'name'     => $request->nominee_name,
+            'relationship' => $request->nominee_relationship,
+            'phone'    => $request->nominee_phone,
+        ]);
+
+
+        return response()->json([
+            'message' => 'Profile Updated successfully',
+            'status' => '1'
+        ]);
+    }
+    public function get_all_countries()
+    {
+        $countries = Country::all();
+        return response()->json([
+            'countries' => $countries,
+            'status' => '1'
+        ]);
+
+    }
+    public function get_states_by_country($id)
+    {
+        $states = State::where('country_id', $id)->get();
+        return response()->json([
+            'states' => $states,
+            'status' => '1'
+        ]);
+    }
+    public function get_districts_by_state($id)
+    {
+        $districts = District::where('state_id', $id)->get();
+        return response()->json([
+            'districts' => $districts,
+            'status' => '1'
+        ]);
+    }
+
+    // public function userSubscriptions()
+    // {
+    //     $id = auth()->user()->id;
+    //     $user_subscriptions = UserSubscription::with('scheme.schemeType')->where('user_id', $id)->orderBy('id', 'desc')->get();
+    //     return response()->json([
+    //         'user_subscriptions' => $user_subscriptions,
+    //         'status' => '1'
+    //     ]);
+    // }
+    
+      public function userSubscriptions()
+  {
+    $id = auth()->user()->id;
+
+   
+    $user_subscriptions = UserSubscription::with('scheme.schemeType')
+    ->where('user_id', $id)
+    ->orderBy('id', 'desc')
+    ->get()
+    ->map(function ($subscription) {
+      $scheme = $subscription->scheme;
+      $schemeType = $scheme->schemeType;
+      $startDate = $subscription->start_date;
+      $endDate = $subscription->end_date;
+
+      $schemeStatus = false;
+
+      if ($schemeType && strtolower($schemeType->shortcode) == 'fixed') {
+        $schemeStatus = true;
+      }
+
+
+      if ($schemeType && strtolower($schemeType->shortcode) == 'flexible') {
+        $startDate = Carbon::parse($startDate);
+        $sevenMonthsLater = $startDate->copy()->addMonths(7);
+
+        if (now() >= $sevenMonthsLater) {
+          $schemeStatus = true;
+        }
+      }
+
+      $subscription->scheme_status = $schemeStatus;
+
+      return $subscription;
+    });
+
+    return response()->json([
+      'user_subscriptions' => $user_subscriptions,
+      'status' => '1'
+    ]);
+  }
+
+
+    
+    
+    
+    function generateDates($start_date_str, $end_date_str)
+    {
+        $start_date = Carbon::parse($start_date_str);
+        $end_date = Carbon::parse($end_date_str);
+
+        $current_date = $start_date;
+        $dates_list = [];
+
+        while ($current_date <= $end_date) {
+            $dates_list[] = $current_date->format('d-m-Y');
+            // Stop when the current month is reached
+            if ($current_date->format('m-Y') == now()->format('m-Y')) {
+                break;
+            }
+
+            $current_date->addMonth(); 
+        }
+
+        return $dates_list;
+    }
+
+
+
+    public function plan_duration($scheme_id)
+    {
+        $id = auth()->user()->id;
+        $user_subscription = UserSubscription::with('scheme')->where('user_id', $id)->where('scheme_id', $scheme_id)->first();
+        $user_subscription_deposits =  Deposit::where('subscription_id', $user_subscription->id)->get();
+
+        $start_date_str = $user_subscription->start_date;
+        $end_date_str = $user_subscription->end_date;
+        // $interval_days = 30;
+
+        $result_dates = $this->generateDates($start_date_str, $end_date_str);
+        $rs_dates = [];
+        foreach ($result_dates as &$d) {
+            $rs_dates[] = [
+                'date' => $d,
+                'amount' => $user_subscription->scheme->schedule_amount,
+                'is_due' => 0,
+                'status' => '0',
+
+            ];
+        }
+        if ($user_subscription_deposits != "") {
+            $deposit_periods = [];
+            foreach ($user_subscription_deposits as $dp) {
+                $deposit_periods[] = $dp->deposit_periods
+                    ->where('status', 1)
+                    ->toarray();
+            }
+
+
+
+            $deposit_dues = [];
+            foreach ($user_subscription_deposits as $dp) {
+                $deposit_dues[] = $dp->deposit_periods
+                    ->where('is_due', 1)
+                    ->toarray();
+            }
+
+
+
+            $flattenedArray = array_merge_recursive(...$deposit_periods);
+            $flattenedduesArray = array_merge_recursive(...$deposit_dues);
+
+            $items = [];
+            foreach ($flattenedArray as &$item) {
+                // Keep only 'due_date' and 'status'
+
+                $items[] = [
+
+                    'due_date' =>
+                    Carbon::parse($item['due_date'])->format('d-m-Y'),
+                    'is_due' => $item['is_due'],
+                    'status' => $item['status'],
+                ];
+            }
+
+            $dues = [];
+            foreach ($flattenedduesArray as &$due) {
+                // Keep only 'due_date' and 'status'
+
+                $dues[] = [
+
+                    'due_date' =>
+                    Carbon::parse($due['due_date'])->format('d-m-Y'),
+                    'is_due' => $due['is_due'],
+                    'status' => $due['status'],
+                ];
+            }
+
+
+
+            foreach ($rs_dates as &$item1) {
+                // Set initial status to 0
+                $item1['status'] = 0;
+                $item1['is_due'] = 0;
+
+                foreach ($items as $item2) {
+                    // Compare based on some criteria, for example, 'id'
+                    if ($item1['date'] === $item2['due_date']) {
+                        // If data exists, set status to 1
+                        if ($item2['status'] === 1) {
+                            $item1['status'] = 1;
+                        }
+
+
+
+                        break; // No need to check further
+                    }
+                }
+                foreach ($dues as $item2) {
+                    // Compare based on some criteria, for example, 'id'
+                    if ($item1['date'] === $item2['due_date']) {
+                        // If data exists, set status to 1
+                        if ($item2['is_due'] === 1) {
+                            $item1['is_due'] = 1;
+                        }
+
+
+
+                        break; // No need to check further
+                    }
+                }
+            }
+        }
+
+        return response()->json([
+            'result_dates' => $rs_dates,
+            'status' => '1'
+        ]);
+    }
+    public function current_plan_history($scheme_id)
+    {
+
+        $id = auth()->user()->id;
+        $user_subscription = UserSubscription::with('scheme')->where('user_id', $id)->where('scheme_id', $scheme_id)->first();
+        $user_subscription_deposits =  Deposit::where('subscription_id', $user_subscription->id)->get();
+        if ($user_subscription_deposits != "") {
+            $deposit_periods = [];
+            $sum = 0;
+            foreach ($user_subscription_deposits as $dp) {
+                $deposit_periods[] = $dp->deposit_periods
+                    ->toarray();
+                if ($dp->status == 1) {
+                    $sum += $dp->final_amount;
+                }
+            }
+            $balance_amount = $user_subscription->scheme->total_amount - $sum;
+            $flattenedArray = array_merge_recursive(...$deposit_periods);
+            $payment_history = [];
+            foreach ($flattenedArray as $array) {
+                $payment_history[] = [
+                    'scheme_amount' => $array['scheme_amount'],
+                    'due_date' => Carbon::parse($array['due_date'])->format('d-m-Y'),
+                    'is_due' => $array['is_due'],
+                    'status' => $array['status'],
+                ];
+            }
+        }
+
+        return response()->json([
+            'scheme_name' => $user_subscription->scheme->title,
+            'description' => $user_subscription->scheme->description,
+            'starting_date' => Carbon::parse($user_subscription->start_date)->format('d-m-Y'),
+            'ending_date' => Carbon::parse($user_subscription->end_date)->format('d-m-Y'),
+            'total_amount_paid' => $sum,
+            'balance_amount' => $balance_amount,
+            'deposit_periods' => $payment_history,
+            'status' => '1'
+        ]);
+    }
+
+
+    public function due_dates($scheme_id)
+    {
+        $id = auth()->user()->id;
+        $user_subscription = UserSubscription::with('scheme')->where('user_id', $id)->where('scheme_id', $scheme_id)->first();
+        $user_subscription_deposits =  Deposit::where('subscription_id', $user_subscription->id)->get();
+
+        // $user_subscription_last_payment = Deposit
+
+        $start_date_str = $user_subscription->start_date;
+        $end_date_str = $user_subscription->end_date;
+        // $interval_days = 30;
+
+        $result_dates = $this->generateDates($start_date_str, $end_date_str);
+        $rs_dates = [];
+        foreach ($result_dates as &$d) {
+            $rs_dates[] = [
+                'date' => $d,
+                'amount' => $user_subscription->scheme->schedule_amount,
+                'is_due' => 0,
+                'status' => '0',
+
+            ];
+        }
+        if ($user_subscription_deposits != "") {
+            $deposit_periods = [];
+            foreach ($user_subscription_deposits as $dp) {
+                $deposit_periods[] = $dp->deposit_periods
+                    ->where('status', 1)
+                    ->toarray();
+            }
+
+
+
+
+            $deposit_dues = [];
+            foreach ($user_subscription_deposits as $dp) {
+                $deposit_dues[] = $dp->deposit_periods
+                    ->where('is_due', 1)
+                    ->toarray();
+            }
+
+
+
+            $flattenedArray = array_merge_recursive(...$deposit_periods);
+            $simpleflattenedArray = $flattenedArray;
+
+            $flattenedduesArray = array_merge_recursive(...$deposit_dues);
+
+            $items = [];
+            foreach ($flattenedArray as &$item) {
+                // Keep only 'due_date' and 'status'
+
+                $items[] = [
+
+                    'due_date' =>
+                    Carbon::parse($item['due_date'])->format('d-m-Y'),
+                    'is_due' => $item['is_due'],
+                    'status' => $item['status'],
+                ];
+            }
+
+            $dues = [];
+            foreach ($flattenedduesArray as &$due) {
+                // Keep only 'due_date' and 'status'
+
+                $dues[] = [
+
+                    'due_date' =>
+                    Carbon::parse($due['due_date'])->format('d-m-Y'),
+                    'is_due' => $due['is_due'],
+                    'status' => $due['status'],
+                ];
+            }
+
+
+
+            foreach ($rs_dates as &$item1) {
+                // Set initial status to 0
+                $item1['status'] = 0;
+                $item1['is_due'] = 0;
+
+                foreach ($items as $item2) {
+                    // Compare based on some criteria, for example, 'id'
+                    if ($item1['date'] === $item2['due_date']) {
+                        // If data exists, set status to 1
+                        if ($item2['status'] === 1) {
+                            $item1['status'] = 1;
+                        }
+
+
+
+                        break; // No need to check further
+                    }
+                }
+                foreach ($dues as $item2) {
+                    // Compare based on some criteria, for example, 'id'
+                    if ($item1['date'] === $item2['due_date']) {
+                        // If data exists, set status to 1
+                        if ($item2['is_due'] === 1) {
+                            $item1['is_due'] = 1;
+                        }
+
+
+
+                        break; // No need to check further
+                    }
+                }
+            }
+            foreach ($rs_dates as $key => $item) {
+                if ($item["status"] == 1) {
+
+                    unset($rs_dates[$key]);
+                }
+            }
+
+            $last_array = end($rs_dates);
+            if (!empty($simpleflattenedArray)) {
+
+                $last_paid_array =  end($simpleflattenedArray);
+                // $simpleflattenedArray
+                unset($simpleflattenedArray[$key]);
+                $last_payment = [
+                    'date' =>   Carbon::parse($last_paid_array['due_date'])->format('d-m-Y'),
+                    'amount' => $last_paid_array['scheme_amount'],
+                ];
+                $current_scheme_latest_month = [
+                    'scheme_name' => $user_subscription->scheme->title,
+                    'date' =>  $last_array['date'],
+                    'amount' => $last_array['amount'],
+                ];
+                $outputData = array_values($rs_dates);
+                return response()->json([
+                    'result_dates' => $outputData,
+                    'last_paid'  => $last_payment,
+                    'current_scheme_latest_month' => $current_scheme_latest_month,
+                    'status' => '1'
+                ]);
+            } else {
+
+                $current_scheme_latest_month = [
+                    'scheme_name' => $user_subscription->scheme->title,
+                    'date' =>  $last_array['date'],
+                    'amount' => $last_array['amount'],
+                ];
+                $outputData = array_values($rs_dates);
+                return response()->json([
+                    'result_dates' => $outputData,
+                    'current_scheme_latest_month' => $current_scheme_latest_month,
+                    'status' => '1'
+                ]);
+            }
+        } else {
+
+            $start_date_str = $user_subscription->start_date;
+            $end_date_str = $user_subscription->end_date;
+            // $interval_days = 30;
+
+            $result_dates = $this->generateDates($start_date_str, $end_date_str);
+            $last_array = end($result_dates);
+            $current_scheme_latest_month = [
+                'scheme_name' => $user_subscription->scheme->title,
+                'date' =>  $last_array['date'],
+                'amount' => $last_array['amount'],
+            ];
+
+            return response()->json([
+                'result_dates' => [],
+                'current_scheme_latest_month' => $current_scheme_latest_month,
+                'status' => '1'
+            ]);
+        }
+    }
+
+
+    public function deposit(Request $request, $sub_id)
+    {
+
+        $request->validate([
+            'total_scheme_amount' => 'required',
+
+        ]);
+
+        $id = auth()->user()->id;
+        $order_id = UniqueHelper::UniqueID();
+        $service_charge = '0.00';
+        $gst_charge = '0.00';
+        $total_scheme_amount = $request->total_scheme_amount;
+        $final_amount = $total_scheme_amount +  $service_charge + $gst_charge;
+        $api = new Api(env('API_KEY'), env('API_SECRET'));
+        $deposit = Deposit::create([
+            'subscription_id' => $sub_id,
+            'order_id' => $order_id,
+            'total_scheme_amount' => $request->total_scheme_amount,
+            'final_amount' =>  $final_amount,
+            'paid_at' => Carbon::now(),
+        ]);
+
+        $selected_payments = $request->selected_payments;
+    
+        foreach ($selected_payments as $selected_payment) {
+            $today = Carbon::now()->format('Y-m-d');
+            $dueDate = $selected_payment['date'];
+            DepositPeriod::create([
+                'deposit_id' => $deposit->id,
+                'due_date' =>  $dueDate,
+                'scheme_amount' => $selected_payment['amount'],
+                'is_due' => ($today > $dueDate) ? '1' : '0',
+
+            ]);
+        
+     }
+        $amount = $final_amount * 100;
+        $order = $api->order->create(array('receipt' => $order_id, 'amount' => $amount, 'currency' => 'INR', 'notes' => array()));
+        RazorpayTransaction::create([
+            'deposit_id' => $deposit->id,
+            'razorpay_order_id' => $order->id,
+        ]);
+        return response()->json([
+            'api_key' => env('API_KEY'),
+            'api_secret' => env('API_SECRET'),
+            'order_id' => $order->id,
+            'amount' => $final_amount,
+            'order' => $order,
+            'status' => '1'
+        ]);
+    }
+
+    public function verifySignature(Request $request)
+    {
+        $input = $request->all();
+        $api = new Api(env('API_KEY'), env('API_SECRET'));
+        $api->utility->verifyPaymentSignature($input);
+
+            $razor_pay_transaction = RazorpayTransaction::where('razorpay_order_id', $input['razorpay_order_id'])->first();
+            $razor_pay_transaction->update([
+                'razorpay_payment_id' => $input['razorpay_payment_id'],
+                'razorpay_signature' => $input['razorpay_signature'],
+                'status' => 1
+            ]);
+
+            $deposit = Deposit::where('id', $razor_pay_transaction->deposit_id)->with('deposit_periods')->first();
+            foreach ($deposit->deposit_periods as $deposit_period) {
+                $dp = DepositPeriod::where('id', $deposit_period->id)->first();
+                $dp->update([
+                    'status' => 1,
+                ]);
+            }
+
+            $deposit->update([
+                'status' => '1',
+            ]);
+
+            return response()->json([
+                'status' => '1',
+                'message' => 'Payment Success'
+            ]);
+
+    }
+
+
+
+    public function wallet()
+    {
+        $id = auth()->user()->id;
+        $user_subscriptions = UserSubscription::with('deposits')->where('user_id', $id)->get();
+
+        $sum = 0;
+        foreach ($user_subscriptions as $user_subscription) {
+            $sum += $user_subscription->deposits()
+                ->where('status', 1)
+                ->sum('final_amount');
+        }
+        return response()->json([
+            'wallet' => $sum,
+            'status' => '1'
+        ]);
+    }
+
+    public function my_payments()
+    {
+        $id = auth()->user()->id;
+        $user_subscriptions = UserSubscription::where('user_id', $id)->get();
+      dd(  $user_subscriptions);
+        $deposits = [];
+        $current_scheme_latest_month = [];
+      
+        foreach ($user_subscriptions as $user_subscription) {
+            $user_subscription_deposits =  Deposit::where('subscription_id', $user_subscription->id)->get();
+
+
+            $start_date_str = $user_subscription->start_date;
+            $end_date_str = $user_subscription->end_date;
+            $result_dates = $this->generateDates($start_date_str, $end_date_str);
+            $rs_dates = [];
+          
+            foreach ($result_dates as &$d) {
+                $rs_dates[] = [
+                    'date' => $d,
+                    'amount' => $user_subscription->subscribe_amount,
+                    'is_due' => 0,
+                    'status' => '0',
+
+                ];
+            }
+           
+            if ($user_subscription_deposits != "") {
+               
+             
+                $deposit_periods = [];
+                foreach ($user_subscription_deposits as $dp) {
+                    $deposit_periods[] = $dp->deposit_periods
+                        ->where('status', 1)
+                        ->toarray();
+                      
+                }
+
+                $flattenedArray = array_merge_recursive(...$deposit_periods);
+            
+                $deposit_dues = [];
+                foreach ($user_subscription_deposits as $dp) {
+                 
+                    $deposit_dues[] = $dp->deposit_periods
+                        ->where('is_due', 1)
+                        ->toarray();
+                }
+
+
+
+                $flattenedArray = array_merge_recursive(...$deposit_periods);
+                $simpleflattenedArray = $flattenedArray;
+
+                $flattenedduesArray = array_merge_recursive(...$deposit_dues);
+
+                $items = [];
+                foreach ($flattenedArray as &$item) {
+                    // Keep only 'due_date' and 'status'
+
+                    $items[] = [
+
+                        'due_date' =>
+                        Carbon::parse($item['due_date'])->format('d-m-Y'),
+                        'is_due' => $item['is_due'],
+                        'status' => $item['status'],
+                    ];
+                }
+
+                $dues = [];
+                foreach ($flattenedduesArray as &$due) {
+                    // Keep only 'due_date' and 'status'
+
+                    $dues[] = [
+
+                        'due_date' =>
+                        Carbon::parse($due['due_date'])->format('d-m-Y'),
+                        'is_due' => $due['is_due'],
+                        'status' => $due['status'],
+                    ];
+                }
+
+
+
+                foreach ($rs_dates as &$item1) {
+                    // Set initial status to 0
+                    $item1['status'] = 0;
+                    $item1['is_due'] = 0;
+
+                    foreach ($items as $item2) {
+                        // Compare based on some criteria, for example, 'id'
+                        if ($item1['date'] === $item2['due_date']) {
+                            // If data exists, set status to 1
+                            if ($item2['status'] === 1) {
+                                $item1['status'] = 1;
+                            }
+
+
+
+                            break; // No need to check further
+                        }
+                    }
+                    foreach ($dues as $item2) {
+                        // Compare based on some criteria, for example, 'id'
+                        if ($item1['date'] === $item2['due_date']) {
+                            // If data exists, set status to 1
+                            if ($item2['is_due'] === 1) {
+                                $item1['is_due'] = 1;
+                            }
+
+
+
+                            break; // No need to check further
+                        }
+                    }
+                }
+                foreach ($rs_dates as $key => $item) {
+                    if ($item["status"] == 1) {
+
+                        unset($rs_dates[$key]);
+                    }
+                }
+                $last_array = end($rs_dates);
+                $current_scheme_latest_month[] = [
+                    'scheme_name' => $user_subscription->scheme->title,
+                    'date' =>  $last_array['date'],
+                    'amount' => $last_array['amount'],
+                ];
+            } else {
+                $last_array = end($result_dates);
+                $current_scheme_latest_month[] = [
+                    'scheme_name' => $user_subscription->scheme->title,
+                    'date' =>  $last_array['date'],
+                    'amount' => $last_array['amount'],
+                ];
+            }
+        }
+
+        return response()->json([
+            'my_payments' => $current_scheme_latest_month,
+            'status' => '1'
+        ]);
+    }
+    public function scheme_history($scheme_id = "")
+    {
+        $id = auth()->user()->id;
+        if ($scheme_id != "") {
+            $user_subscription = UserSubscription::with('scheme')->where('user_id', $id)->where('scheme_id', $scheme_id)->first();
+            $user_subscription_deposits =  Deposit::where('subscription_id', $user_subscription->id)->get();
+
+            $sum = 0;
+            $dates_array = [];
+            foreach ($user_subscription_deposits as  $user_subscription_deposit) {
+                if ($user_subscription_deposit->status == '1') {
+                    $sum += $user_subscription_deposit->final_amount;
+                    $dates_array[] = [
+                        'scehme' => $user_subscription->scheme->title,
+                        'date' => $user_subscription_deposit->paid_at,
+                        'amount' => $user_subscription_deposit->final_amount,
+
+                    ];
+                }
+            }
+
+
+
+            return response()->json([
+                'wallet' => $sum,
+                'scheme_history' => $dates_array,
+                'status' => '1'
+            ]);
+        } else {
+            $user_subscriptions = UserSubscription::where('user_id', $id)->get();
+            $sum = 0;
+            $dates_array = [];
+            foreach ($user_subscriptions as $user_subscription) {
+                $user_subscription_deposits =  Deposit::where('subscription_id', $user_subscription->id)->where('status', '1')->get();
+
+
+                $sum += $user_subscription->deposits()
+
+                    ->sum('final_amount');
+                foreach ($user_subscription_deposits as  $user_subscription_deposit) {
+                    $dates_array[] = [
+                        'scehme' => $user_subscription->scheme->title,
+                        'date' => $user_subscription_deposit->paid_at,
+                        'amount' => $user_subscription_deposit->final_amount,
+
+                    ];
+                }
+            }
+
+            return response()->json([
+                'wallet' => $sum,
+                'scheme_history' => $dates_array,
+                'status' => '1'
+            ]);
+        }
+    }
+    // public function order()
+    // {
+    // }
+}
