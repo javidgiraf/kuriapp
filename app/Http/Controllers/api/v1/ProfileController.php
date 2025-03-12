@@ -446,38 +446,23 @@ class ProfileController extends Controller
       $schemeType = $user_subscription->scheme->schemeType;
 
       $balance_amount = 0;
-      $start = new DateTime($user_subscription->start_date);
-      $end = new DateTime($user_subscription->end_date);
 
-      if ($schemeType->id != SchemeType::FIXED_PLAN) {
-        $currentDate = now();
-        $startDate = Carbon::parse($user_subscription->start_date);
-        $endDate = Carbon::parse($user_subscription->end_date);
-        $duration = $user_subscription->scheme->schemeSetting->due_duration;
-        $schemeType = SchemeType::find($user_subscription->scheme->scheme_type_id);
-        $flexibility_duration = $schemeType ? $schemeType->flexibility_duration : 0;
-        $holdDateFlexible = $startDate->copy()->addMonths($flexibility_duration)->firstOfMonth();
+      if ($schemeType->id == SchemeType::FIXED_PLAN) {
+        $start = new DateTime($user_subscription->start_date);
+        $end = new DateTime($user_subscription->end_date);
 
-        if (
-          $currentDate->greaterThanOrEqualTo($holdDateFlexible) &&
-          $user_subscription->scheme->scheme_type_id != SchemeType::FIXED_PLAN
-        ) {
-          $start = new DateTime($holdDateFlexible);
-          $end = new DateTime($endDate);
+        $end->modify('first day of next month');
+        $monthsCount = 0;
+
+        while ($start < $end) {
+          $start->modify('first day of next month');
+          $monthsCount++;
         }
+
+        $balance_amount = $sum != 0 ?
+          ($user_subscription->subscribe_amount * $monthsCount) - $sum
+          : ($user_subscription->subscribe_amount * $monthsCount);
       }
-
-      $end->modify('first day of next month');
-      $monthsCount = 0;
-
-      while ($start < $end) {
-        $start->modify('first day of next month');
-        $monthsCount++;
-      }
-
-      $balance_amount = $sum != 0 ?
-        ($user_subscription->subscribe_amount * $monthsCount) - $sum
-        : ($user_subscription->subscribe_amount * $monthsCount);
 
 
       $payment_history = [];
@@ -655,18 +640,18 @@ class ProfileController extends Controller
     //   }
     // }
 
-    if ($currentDate->greaterThan($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
-      $allowedAmount = $flexibilityDuration
-        ? ($totalFlexibleSchemeAmount / $flexibilityDuration)
-        : 0;
+    // if ($currentDate->greaterThan($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
+    //   $allowedAmount = $flexibilityDuration
+    //     ? ($totalFlexibleSchemeAmount / $flexibilityDuration)
+    //     : 0;
 
-      if ($request->total_scheme_amount > round($allowedAmount)) {
-        return response()->json([
-          'success' => false,
-          'message' => "The deposit amount exceeds the allowable limit of " . round($allowedAmount) . " after the 6-month period.",
-        ], 400);
-      }
-    }
+    //   if ($request->total_scheme_amount > round($allowedAmount)) {
+    //     return response()->json([
+    //       'success' => false,
+    //       'message' => "The deposit amount exceeds the allowable limit of " . round($allowedAmount) . " after the 6-month period.",
+    //     ], 400);
+    //   }
+    // }
 
 
     // Create the deposit
@@ -708,6 +693,12 @@ class ProfileController extends Controller
     // Create Deposit Period
     $dueDuration = $scheme->schemeSetting->due_duration;
     $dueDate = Carbon::now()->startOfMonth()->addDays($dueDuration);
+
+    if ($currentDate->lessThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
+      
+      $dueDate = now();
+    }
+
     // $paymentDate = Carbon::now()->startOfMonth()->addMonth();
 
     // if ($paymentDate->greaterThan($currentDate)) {
