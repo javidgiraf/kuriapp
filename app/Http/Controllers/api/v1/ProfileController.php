@@ -257,9 +257,22 @@ class ProfileController extends Controller
           return Carbon::parse($deposit->paid_at)->format('Y-m') === $currentMonth && $deposit->status == 1;
         });
 
+        $dueDate = now();
+
         // Calculate due date and check due status
-        $dueDate = $schemeSetting ? now()->startOfMonth()->addDays($scheme->schemeSetting->due_duration) : null;
-        $isDue = $dueDate && !$depositExistsThisMonth && now()->greaterThan($dueDate);
+        if($schemeType->id == SchemeType::FIXED_PLAN) {
+          $dueDate = Carbon::now()->startOfMonth()->addDays($duration);
+        }
+    
+        $flexibilityDuration = $schemeType->flexibility_duration ?? 6;
+        $endSixMonthPeriod = (clone $startDate)->addMonths($flexibilityDuration);
+
+        if ($currentDate->greaterThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
+          $dueDate = (now()->format('d') > 15) ?
+            Carbon::now()->addMonths(1)->startOfMonth()->addDays($duration)
+            : Carbon::now()->startOfMonth()->addDays($duration);
+        }
+        $isDue = $dueDate && !$depositExistsThisMonth && now()->greaterThanOrEqualTo($dueDate);
 
         // Check hold status
         $holdStatus = $subscription->status != 1;
@@ -692,11 +705,16 @@ class ProfileController extends Controller
 
     // Create Deposit Period
     $dueDuration = $scheme->schemeSetting->due_duration;
-    $dueDate = Carbon::now()->startOfMonth()->addDays($dueDuration);
+    $dueDate = now();
 
-    if ($currentDate->lessThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
-      
-      $dueDate = now();
+    if($schemeType->id == SchemeType::FIXED_PLAN) {
+      $dueDate = Carbon::now()->startOfMonth()->addDays($dueDuration);
+    }
+
+    if ($currentDate->greaterThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
+      $dueDate = (now()->format('d') > 15) ?
+        Carbon::now()->addMonths(1)->startOfMonth()->addDays($dueDuration)
+        : Carbon::now()->startOfMonth()->addDays($dueDuration);
     }
 
     // $paymentDate = Carbon::now()->startOfMonth()->addMonth();
@@ -712,7 +730,7 @@ class ProfileController extends Controller
       'deposit_id' => $deposit->id,
       'due_date' => $dueDate,
       'scheme_amount' => $totalSchemeAmount,
-      'is_due' => $currentDate->greaterThan($dueDate) ? '1' : '0',
+      'is_due' => $currentDate->greaterThanOrEqualTo($dueDate) ? '1' : '0',
     ]);
 
     // Prepare Razorpay Transaction
