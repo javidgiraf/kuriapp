@@ -105,7 +105,7 @@ class LoginController extends Controller
 
             if (!$user) {
                 return response()->json([
-                    'message' => 'User not found.',
+                    'message' => 'Please enter a valid mobile no.',
                     'status'  => '0',
                 ], 404);
             }
@@ -117,6 +117,13 @@ class LoginController extends Controller
             if (!$customer) {
                 return response()->json([
                     'message' => 'This account does not exist',
+                    'status' => '0'
+                ], 404);
+            }
+
+            if($customer->is_verified == false) {
+                return response()->json([
+                    'message' => 'Please verify your account first.',
                     'status' => '0'
                 ], 404);
             }
