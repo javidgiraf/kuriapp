@@ -219,7 +219,7 @@ class ProfileController extends Controller
         $duration = $subscription->scheme->schemeSetting->due_duration;
         $schemeType = SchemeType::find($subscription->scheme->scheme_type_id);
         $flexibility_duration = $schemeType ? $schemeType->flexibility_duration : 0;
-        $holdDateFlexible = $startDate->copy()->addMonths($flexibility_duration)->addDays($duration);
+        $holdDateFlexible = $startDate->copy()->addMonths($flexibility_duration);
 
         $monthKey = $currentDate->format('Y-m');
         $existingPayments = DepositPeriod::whereHas('deposit', function ($query) use ($subscription) {
@@ -260,10 +260,10 @@ class ProfileController extends Controller
         $dueDate = now();
 
         // Calculate due date and check due status
-        if($schemeType->id == SchemeType::FIXED_PLAN) {
+        if ($schemeType->id == SchemeType::FIXED_PLAN) {
           $dueDate = Carbon::now()->startOfMonth()->addDays($duration);
         }
-    
+
         $flexibilityDuration = $schemeType->flexibility_duration ?? 6;
         $endSixMonthPeriod = (clone $startDate)->addMonths($flexibilityDuration);
 
@@ -437,7 +437,7 @@ class ProfileController extends Controller
     $user_subscription = UserSubscription::with(['deposits.deposit_periods', 'scheme.schemeSetting', 'schemeSetting', 'scheme.schemeType'])
       ->where('user_id', $id)
       ->where('scheme_id', $scheme_id)
-      ->latest()
+      ->orderBy('created_at', 'desc')
       ->first();
 
     if ($user_subscription) {
@@ -456,13 +456,19 @@ class ProfileController extends Controller
         }
       }
 
-      $schemeType = $user_subscription->scheme->schemeType;
-
+      $scheme = $user_subscription->scheme;
+      $schemeType = $scheme->schemeType;
+      $startDate = Carbon::parse($user_subscription->start_date);
+      $currentDate = now();
+      $flexibilityDuration = $schemeType->flexibility_duration ?? 6; // First 6 months
+      $endSixMonthPeriod = (clone $startDate)->addMonths($flexibilityDuration);
       $balance_amount = 0;
 
-      if ($schemeType->id == SchemeType::FIXED_PLAN) {
-        $start = new DateTime($user_subscription->start_date);
-        $end = new DateTime($user_subscription->end_date);
+      $start = new DateTime($user_subscription->start_date);
+      $end = new DateTime($user_subscription->end_date);
+
+      if ($currentDate->greaterThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
+        $start = $start->modify('+6 months');
 
         $end->modify('first day of next month');
         $monthsCount = 0;
@@ -472,9 +478,34 @@ class ProfileController extends Controller
           $monthsCount++;
         }
 
-        $balance_amount = $sum != 0 ?
-          ($user_subscription->subscribe_amount * $monthsCount) - $sum
-          : ($user_subscription->subscribe_amount * $monthsCount);
+        $totalFlexibleSchemeAmount = DepositPeriod::whereHas('deposit', function ($query) use ($user_subscription) {
+          $query->where('subscription_id', $user_subscription->id)
+            ->where('status', true);
+        })
+          ->where('due_date', '>=', $startDate->format('Y-m-d'))
+          ->where('due_date', '<', $endSixMonthPeriod->format('Y-m-d'))
+          ->where('status', true)
+          ->sum('scheme_amount');
+
+        $expectedAmount = $user_subscription->subscribe_amount * $monthsCount;
+
+        // Fix negative balance issue
+        $balance_amount = max(0, $expectedAmount - ($totalFlexibleSchemeAmount ?? 0));
+      }
+
+      if ($schemeType->id == SchemeType::FIXED_PLAN) {
+        $end->modify('first day of next month');
+        $monthsCount = 0;
+
+        while ($start < $end) {
+          $start->modify('first day of next month');
+          $monthsCount++;
+        }
+
+        $expectedAmount = $user_subscription->subscribe_amount * $monthsCount;
+
+        // Fix negative balance issue
+        $balance_amount = max(0, $expectedAmount - ($sum ?? 0));
       }
 
 
@@ -520,7 +551,7 @@ class ProfileController extends Controller
       $duration = $user_subscription->scheme->schemeSetting->due_duration;
       $schemeType = SchemeType::find($user_subscription->scheme->scheme_type_id);
       $flexibility_duration = $schemeType ? $schemeType->flexibility_duration : 0;
-      $holdDateFlexible = $startDate->copy()->addMonths($flexibility_duration)->addDays($duration);
+      $holdDateFlexible = $startDate->copy()->addMonths($flexibility_duration);
 
       if (
         $currentDate->greaterThanOrEqualTo($holdDateFlexible) &&
@@ -707,7 +738,7 @@ class ProfileController extends Controller
     $dueDuration = $scheme->schemeSetting->due_duration;
     $dueDate = now();
 
-    if($schemeType->id == SchemeType::FIXED_PLAN) {
+    if ($schemeType->id == SchemeType::FIXED_PLAN) {
       $dueDate = Carbon::now()->startOfMonth()->addDays($dueDuration);
     }
 
@@ -1015,10 +1046,12 @@ class ProfileController extends Controller
     $endDate = Carbon::parse($subscription->end_date)->format('Y-m-d');
 
     $totalFlexibleSchemeAmount = DepositPeriod::whereHas('deposit', function ($query) use ($subscription) {
-      $query->where('subscription_id', $subscription->id);
+      $query->where('subscription_id', $subscription->id)
+        ->where('status', true);
     })
       ->where('due_date', '>=', $startDate)
       ->where('due_date', '<=', $endDate)
+      ->where('status', true)
       ->sum('scheme_amount');
 
     $goldWeight = 0;
@@ -1060,10 +1093,11 @@ class ProfileController extends Controller
     $endDate = Carbon::parse($subscription->end_date)->format('Y-m-d');
 
     $totalFlexibleSchemeAmount = DepositPeriod::whereHas('deposit', function ($query) use ($subscription) {
-      $query->where('subscription_id', $subscription->id);
+      $query->where('subscription_id', $subscription->id)->where('status', true);
     })
       ->where('due_date', '>=', $startDate)
       ->where('due_date', '<=', $endDate)
+      ->where('status', true)
       ->sum('scheme_amount');
 
     $goldWeight = 0;
@@ -1328,6 +1362,7 @@ class ProfileController extends Controller
       ->get();
 
     $flattenedSubscriptions = $userSubscriptions->map(function ($subscription) {
+
       return [
         'id' => $subscription->id,
         'scheme_id' => $subscription->scheme_id,
