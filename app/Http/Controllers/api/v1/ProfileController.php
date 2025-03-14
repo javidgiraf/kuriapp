@@ -459,41 +459,40 @@ class ProfileController extends Controller
       $scheme = $user_subscription->scheme;
       $schemeType = $scheme->schemeType;
       $startDate = Carbon::parse($user_subscription->start_date);
+      $endDate = Carbon::parse($user_subscription->end_date);
       $currentDate = now();
       $flexibilityDuration = $schemeType->flexibility_duration ?? 6; // First 6 months
       $endSixMonthPeriod = (clone $startDate)->addMonths($flexibilityDuration);
       $balance_amount = 0;
 
-      $start = new DateTime($user_subscription->start_date);
-      $end = new DateTime($user_subscription->end_date);
-
       if ($currentDate->greaterThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
-        $start = $start->modify('+6 months');
-
-        $end->modify('first day of next month');
         $monthsCount = 0;
+        $start = (clone $startDate)->modify('+6 months');
+        $end = (new DateTime($user_subscription->end_date))->modify('first day of next month');
 
-        while ($start < $end) {
-          $start->modify('first day of next month');
-          $monthsCount++;
+        if ($start < $end) {
+          while ($start < $end) {
+            $start->modify('first day of next month');
+            $monthsCount++;
+          }
         }
 
-        $totalFlexibleSchemeAmount = DepositPeriod::whereHas('deposit', function ($query) use ($user_subscription) {
-          $query->where('subscription_id', $user_subscription->id)
-            ->where('status', true);
-        })
-          ->where('due_date', '>=', $startDate->format('Y-m-d'))
-          ->where('due_date', '<', $endSixMonthPeriod->format('Y-m-d'))
-          ->where('status', true)
-          ->sum('scheme_amount');
+        $totalFlexibleSchemeAmount = Deposit::where('subscription_id', $user_subscription->id)
+          ->where('paid_at', '>=', $endSixMonthPeriod->format('Y-m-d'))
+          ->where('paid_at', '<=', $endDate->format('Y-m-d'))
+          ->where('total_scheme_amount', $user_subscription->subscribe_amount)
+          ->where('status', '1')
+          ->sum('final_amount');
 
         $expectedAmount = $user_subscription->subscribe_amount * $monthsCount;
 
-        // Fix negative balance issue
         $balance_amount = max(0, $expectedAmount - ($totalFlexibleSchemeAmount ?? 0));
       }
 
       if ($schemeType->id == SchemeType::FIXED_PLAN) {
+        $start = new DateTime($user_subscription->start_date);
+        $end = new DateTime($user_subscription->end_date);
+
         $end->modify('first day of next month');
         $monthsCount = 0;
 
