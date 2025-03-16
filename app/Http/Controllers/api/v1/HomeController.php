@@ -24,6 +24,21 @@ class HomeController extends Controller
     ]);
   }
 
+  public function contactSupport()
+  {
+    $setting = Setting::first();
+    
+    $response = [
+      'contact_support' => $setting->support_contact,
+      'working_time' => $setting->working_time
+    ];
+
+    return response()->json([
+      'status' => '1',
+      'data' => $response
+    ]);
+  }
+
   public function all_schemes()
   {
     header('Content-Type: text/html; charset=utf-8');

@@ -36,6 +36,7 @@ Route::group(['prefix' => 'v1'], function () {
     Route::get('available-schemes', [HomeController::class, 'availableSchemes']);
     Route::get('/schemes-pdf', [HomeController::class, 'schemesPdf']);
     Route::get('get-terms-and-conditions', [HomeController::class, 'getTermsAndConditions']);
+    Route::get('contact-support', [HomeController::class, 'contactSupport']);
 
     Route::group(['middleware' => ['auth:sanctum']], function () {
         Route::get('logout', [LoginController::class, 'logout']);

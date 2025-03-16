@@ -15,6 +15,8 @@ class Setting extends Model
         'option_value',
         'terms_and_conditions_en',
         'terms_and_conditions_ml',
+        'support_contact',
+        'working_time',
         'symbol',
         'status'
     ];
