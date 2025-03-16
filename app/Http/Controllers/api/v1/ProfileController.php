@@ -18,6 +18,7 @@ use App\Models\Deposit;
 use App\Models\DepositPeriod;
 use App\Models\GoldRate;
 use App\Models\GoldDeposit;
+use App\Models\Setting;
 use Carbon\Carbon;
 use App\Helpers;
 use App\Models\RazorpayTransaction;
@@ -840,7 +841,7 @@ class ProfileController extends Controller
     $matureStatus = $user_subscriptions->is_closed;
     $claim_date = Carbon::parse($user_subscriptions->claim_date)->format('d-m-Y');
     $claim_status = $user_subscriptions->claim_status;
-    $support_contact = "1234567890";
+    $support_contact = Setting::first()->contact_support;
 
 
     $sum = $user_subscriptions->deposits()
