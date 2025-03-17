@@ -35,7 +35,7 @@ class UserSubscription extends Model
     
     public function scheme()
     {
-        return $this->hasOne(Scheme::class, 'id', 'scheme_id');
+        return $this->belongsTo(Scheme::class, 'scheme_id', 'id');
     }
 
     public function deposits()
