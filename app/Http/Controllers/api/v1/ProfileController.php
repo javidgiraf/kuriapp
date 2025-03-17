@@ -437,8 +437,7 @@ class ProfileController extends Controller
     $user_subscription = UserSubscription::with(['deposits.deposit_periods', 'scheme.schemeSetting', 'schemeSetting', 'scheme.schemeType'])
       ->where('user_id', $id)
       ->where('scheme_id', $scheme_id)
-      ->orderBy('created_at', 'desc')
-      ->first();
+      ->findOrFail(request('sub_id'));
 
     if ($user_subscription) {
       $user_subscription_deposits = Deposit::where('subscription_id', $user_subscription->id)
