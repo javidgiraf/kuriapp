@@ -222,7 +222,18 @@ class ProfileController extends Controller
         $flexibility_duration = $schemeType ? $schemeType->flexibility_duration : 0;
         $holdDateFlexible = $startDate->copy()->addMonths($flexibility_duration);
 
-        $monthKey = $currentDate->format('Y-m');
+        $dueDate = now();
+
+        // Calculate due date and check due status
+        if (
+          $currentDate->greaterThanOrEqualTo($holdDateFlexible) && $schemeType->id !== SchemeType::FIXED_PLAN
+          || $schemeType->id == SchemeType::FIXED_PLAN
+        ) {
+
+          $dueDate = Carbon::now()->startOfMonth()->addMonths(1)->addDays($duration);
+        }
+
+        $monthKey = $dueDate->format('Y-m');
         $existingPayments = DepositPeriod::whereHas('deposit', function ($query) use ($subscription) {
           $query->where('subscription_id', $subscription->id)
             ->where('status', true);
@@ -257,17 +268,6 @@ class ProfileController extends Controller
         $depositExistsThisMonth = $subscription->deposits->contains(function ($deposit) use ($currentMonth) {
           return Carbon::parse($deposit->paid_at)->format('Y-m') === $currentMonth && $deposit->status == 1;
         });
-
-        $dueDate = now();
-
-        // Calculate due date and check due status
-        if (
-          $currentDate->greaterThanOrEqualTo($holdDateFlexible) && $schemeType->id !== SchemeType::FIXED_PLAN
-          || $schemeType->id == SchemeType::FIXED_PLAN
-        ) {
-
-          $dueDate = Carbon::now()->startOfMonth()->addMonths(1)->addDays($duration);
-        }
 
         // $flexibilityDuration = $schemeType->flexibility_duration ?? 6;
         // $endSixMonthPeriod = (clone $startDate)->addMonths($flexibilityDuration);
@@ -461,6 +461,7 @@ class ProfileController extends Controller
       $currentDate = now();
       $flexibilityDuration = $schemeType->flexibility_duration ?? 6; // First 6 months
       $endSixMonthPeriod = (clone $startDate)->addMonths($flexibilityDuration);
+      $duration = $user_subscription->scheme->schemeSetting->due_duration;
       $balance_amount = 0;
 
       if ($currentDate->greaterThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
@@ -529,7 +530,18 @@ class ProfileController extends Controller
       $startDate = Carbon::parse($user_subscription->start_date);
       $currentDate = now();
 
-      $monthKey = $currentDate->format('Y-m');
+      $dueDate = now();
+
+      // Calculate due date and check due status
+      if (
+        $currentDate->greaterThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN
+        || $schemeType->id == SchemeType::FIXED_PLAN
+      ) {
+
+        $dueDate = Carbon::now()->startOfMonth()->addMonths(1)->addDays($duration);
+      }
+
+      $monthKey = $dueDate->format('Y-m');
       $existingPayments = DepositPeriod::whereHas('deposit', function ($query) use ($user_subscription) {
         $query->where('subscription_id', $user_subscription->id)
           ->where('status', true);
@@ -545,7 +557,6 @@ class ProfileController extends Controller
         $schemeStatus = false;
       }
 
-      $duration = $user_subscription->scheme->schemeSetting->due_duration;
       $schemeType = SchemeType::find($user_subscription->scheme->scheme_type_id);
       $flexibility_duration = $schemeType ? $schemeType->flexibility_duration : 0;
       $holdDateFlexible = $startDate->copy()->addMonths($flexibility_duration);
@@ -645,6 +656,7 @@ class ProfileController extends Controller
     $scheme = $userSubscription->scheme;
     $schemeType = $scheme->schemeType;
     $startDate = Carbon::parse($userSubscription->start_date);
+    $endDate = Carbon::parse($userSubscription->end_date);
     $currentDate = now();
     $flexibilityDuration = $schemeType->flexibility_duration ?? 6; // First 6 months
     $endSixMonthPeriod = (clone $startDate)->addMonths($flexibilityDuration);
@@ -744,12 +756,14 @@ class ProfileController extends Controller
     }
 
 
-    // $paymentDate = Carbon::now()->startOfMonth()->addMonth();
+    $paymentDate = Carbon::parse($deposit->paid_at);
+    $result_dates = $this->generateDates($startDate, $endDate);
+    
 
-    // if ($paymentDate->greaterThan($currentDate)) {
+    // if ($currentDate->greaterThan($dueDate)) {
     //   return response()->json([
     //     'success' => '0',
-    //     'message' => 'The payment date cannot be after the current date.'
+    //     'message' => 'The payment date cannot be after the due date.'
     //   ], 400);
     // }
 
