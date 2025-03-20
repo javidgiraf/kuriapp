@@ -261,18 +261,16 @@ class ProfileController extends Controller
         $dueDate = now();
 
         // Calculate due date and check due status
-        if ($schemeType->id == SchemeType::FIXED_PLAN) {
-          $dueDate = Carbon::now()->startOfMonth()->addDays($duration);
+        if (
+          $currentDate->greaterThanOrEqualTo($holdDateFlexible) && $schemeType->id !== SchemeType::FIXED_PLAN
+          || $schemeType->id == SchemeType::FIXED_PLAN
+        ) {
+
+          $dueDate = Carbon::now()->startOfMonth()->addMonths(1)->addDays($duration);
         }
 
-        $flexibilityDuration = $schemeType->flexibility_duration ?? 6;
-        $endSixMonthPeriod = (clone $startDate)->addMonths($flexibilityDuration);
-
-        if ($currentDate->greaterThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
-          $dueDate = (now()->format('d') > 15) ?
-            Carbon::now()->addMonths(1)->startOfMonth()->addDays($duration)
-            : Carbon::now()->startOfMonth()->addDays($duration);
-        }
+        // $flexibilityDuration = $schemeType->flexibility_duration ?? 6;
+        // $endSixMonthPeriod = (clone $startDate)->addMonths($flexibilityDuration);
         $isDue = $dueDate && !$depositExistsThisMonth && now()->greaterThanOrEqualTo($dueDate);
 
         // Check hold status
@@ -737,15 +735,14 @@ class ProfileController extends Controller
     $dueDuration = $scheme->schemeSetting->due_duration;
     $dueDate = now();
 
-    if ($schemeType->id == SchemeType::FIXED_PLAN) {
-      $dueDate = Carbon::now()->startOfMonth()->addDays($dueDuration);
+    if (
+      $currentDate->greaterThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN
+      || $schemeType->id == SchemeType::FIXED_PLAN
+    ) {
+
+      $dueDate = Carbon::now()->startOfMonth()->addMonths(1)->addDays($dueDuration);
     }
 
-    if ($currentDate->greaterThanOrEqualTo($endSixMonthPeriod) && $schemeType->id !== SchemeType::FIXED_PLAN) {
-      $dueDate = (now()->format('d') > 15) ?
-        Carbon::now()->addMonths(1)->startOfMonth()->addDays($dueDuration)
-        : Carbon::now()->startOfMonth()->addDays($dueDuration);
-    }
 
     // $paymentDate = Carbon::now()->startOfMonth()->addMonth();
 
